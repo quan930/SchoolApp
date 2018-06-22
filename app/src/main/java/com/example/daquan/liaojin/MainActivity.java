@@ -1,6 +1,7 @@
 package com.example.daquan.liaojin;
 
 import android.annotation.SuppressLint;
+import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -15,7 +16,9 @@ import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebView;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -48,18 +51,14 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     private ImageView imageView;
-    private Spinner spinner;
+    private AutoCompleteTextView autoCompleteTextView;
     private EditText editText;
     private Button button;
     private ListView listView;
     private String session;//cookie
-    private List<String> teacherNames;
-    private List<String> teacherIDs;
-    private List<String> classNames;
-    private ArrayAdapter<String> arr_adapter;
-    private ArrayAdapter<String> adapter;
-    private List<Teacher> teachers = new ArrayList<>();
-    private Teacher teacher;
+    private List<String> teacherNames;//教师名字
+    private List<String> teacherIDs;//教师id
+    private List<Teacher> teachers;
 
     @SuppressLint("HandlerLeak")
     @Override
@@ -69,7 +68,7 @@ public class MainActivity extends AppCompatActivity {
         imageView = findViewById(R.id.imageView);
         editText = findViewById(R.id.editText);
         button = findViewById(R.id.button);
-        spinner = findViewById(R.id.spinner);
+        autoCompleteTextView = findViewById(R.id.auto);
         listView = findViewById(R.id.listView);
 
         start();
@@ -79,11 +78,16 @@ public class MainActivity extends AppCompatActivity {
                 getImg();
             }
         });
-
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 getTeacherClass();
+            }
+        });
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                new ShowPup().showPopup(MainActivity.this,view,teachers.get(position));
             }
         });
     }
@@ -110,6 +114,7 @@ public class MainActivity extends AppCompatActivity {
     }
     //获取教师列表，id
     private void getList(){
+        final ArrayAdapter<String> arr_adapter;
         teacherIDs = new ArrayList<>();
         teacherNames = new ArrayList<>();
         URL u2 = null;
@@ -129,7 +134,7 @@ public class MainActivity extends AppCompatActivity {
                 sb2.append(s2);
             }
 
-            String s = sb2.toString();
+            final String s = sb2.toString();
 //		System.out.println(s);
             //数据格式如下：
             //<option value=0000368>Kerry Button</option>
@@ -159,7 +164,7 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void run() {
                     //加载适配器
-                    spinner.setAdapter(arr_adapter);
+                    autoCompleteTextView.setAdapter(arr_adapter);
                 }
             });
         } catch (MalformedURLException e) {
@@ -201,6 +206,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 try {
+                    final ArrayAdapter<String> adapter;
                     URL url = new URL("http://59.79.112.9/ZNPK/TeacherKBFB_rpt.aspx");
                     HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                     connection.setDoOutput(true);
@@ -209,45 +215,61 @@ public class MainActivity extends AppCompatActivity {
                     connection.addRequestProperty("Cookie", session);
 
                     Log.d("验证码",editText.getText().toString());
-                    //post请求内容
-                    String id = teacherIDs.get(spinner.getSelectedItemPosition());//获得spinner列表索引
-                    String postString = "Sel_XNXQ=20170&Sel_JS="+id+"&type=2&txt_yzm=" + editText.getText().toString();
+                    //判断教师名字输入框
+                    if(autoCompleteTextView.getText().toString().equals("")){
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(MainActivity.this,"名字不为空",Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }else if(!teacherNames.contains(autoCompleteTextView.getText().toString())){
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(MainActivity.this,"名字错误",Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }else {
+                        //post请求内容
+                        String id = teacherIDs.get(teacherNames.indexOf(autoCompleteTextView.getText().toString()));//获得spinner列表索引
+                        String postString = "Sel_XNXQ=20171&Sel_JS="+id+"&type=2&txt_yzm=" + editText.getText().toString();
+                        String html = postMessage(connection,postString);
 
-                    OutputStream os = connection.getOutputStream();
-                    os.write(postString.getBytes());
-
-                    InputStream is = connection.getInputStream();
-                    BufferedReader bf = new BufferedReader(new InputStreamReader(is, "GB2312"));
-                    String line = null;
-                    StringBuilder sBuilder = new StringBuilder();
-                    //响应数据
-                    while ((line = bf.readLine()) != null) {
-                        sBuilder.append(line);
-//                        Log.d("阿斯顿", line);
-                    }
-
-                    final String html = sBuilder.toString();
-//                    Log.d(html, "全");
-                    Document doc = Jsoup.parseBodyFragment(html);
-                    Elements body = doc.getElementsByTag("table");
-
-                    processData(body);
-
-//                    Log.d("似懂非懂",body.toString());
-                    Log.d("课程信息",String.valueOf(teachers.size()));
-                    classNames = new ArrayList<>();
-                    for(int i = 0;i < teachers.size();i++){
-                        classNames.add(teachers.get(i).getClassName());
-                    }
-                    adapter = new ArrayAdapter<String>(MainActivity.this,android.R.layout.simple_list_item_1,classNames);
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            listView.setAdapter(adapter);
+                        //判断验证码
+                        if(html.contains("验证码错误！")){
+                            Log.d("错误", "run: ");
+                            getImg();//刷新验证码
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    Toast.makeText(MainActivity.this,"验证码错误",Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                        }else{//验证码正确逻辑
+                            //处理响应数据
+                            Document doc = Jsoup.parseBodyFragment(html);
+                            List<String> names = processData(doc);
+                            Log.d("课程信息",String.valueOf(teachers.size()));
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if(teachers.size()==0){
+                                        Log.d("没有课", "run: ");
+                                        Toast.makeText(MainActivity.this,"没有课",Toast.LENGTH_LONG).show();
+                                    }
+                                }
+                            });
+                            adapter = new ArrayAdapter<String>(MainActivity.this,android.R.layout.simple_list_item_1,names);
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    listView.setAdapter(adapter);
+                                }
+                            });
                         }
-                    });
                     connection.disconnect();
-
+                    }
 
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -257,25 +279,38 @@ public class MainActivity extends AppCompatActivity {
             }
         }).start();
     }
-    //post响应数据
-    private void processData(Elements body){
+    //post响应数据,返回课程列表
+    private List<String> processData(Document doc){
+        Elements body = doc.getElementsByTag("table");
+        teachers = new ArrayList<>();
+        List<String> classNames;
+        Teacher teacher = null;
         //数据解析
         int lineNum = 1;//行数
         for(int i = 0;i < body.size();i++) {
             Elements tds = body.get(i).select("td");
+//            Log.d("礼品",tds.text());
+            if(tds.text().equals("环节")){
+                break;
+            }
             for(int j = 0;j < tds.size();j++){
                 String oldClose = tds.get(j).text();
+//                Log.d("漂亮",oldClose);
                 if(oldClose.equals(String.valueOf(lineNum))) {
+                    if (tds.get(j+1).text().equals("7")){
+                        break;
+                    }
                     if(tds.get(j+1).text().equals("")) {//原课
 
                     }else {//新课
                         teacher = new Teacher();
-                        Log.d("有一个课", "run: ");
+                        Log.d("有一个课",tds.get(j+1).text());
                         teachers.add(teacher);
                     }
                     for(int k = 0;k < 9;k++) {
                         j++;
                         String asd = tds.get(j).text();
+//                        Log.d("详情",String.valueOf(k)+":"+asd);
                         if(asd.equals("")) {
 
                         }else {
@@ -290,5 +325,33 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
+        classNames = new ArrayList<>();
+        for(int i = 0;i < teachers.size();i++){
+            classNames.add(teachers.get(i).getClassName());
+        }
+        return classNames;
+    }
+    //post发数据接收数据，验证码正确返回true
+    private String postMessage(HttpURLConnection connection,String postString){
+        String message = "错误";
+        try {
+            //post
+            OutputStream os = connection.getOutputStream();
+            os.write(postString.getBytes());
+            //接收
+            InputStream is = connection.getInputStream();
+            BufferedReader bf = new BufferedReader(new InputStreamReader(is, "GB2312"));
+            String line = null;
+            StringBuilder stringBuilder = new StringBuilder();
+            //响应数据
+            while ((line = bf.readLine()) != null) {
+                stringBuilder.append(line);
+//                Log.d("阿斯顿", line);
+            }
+            message=stringBuilder.toString();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return message;
     }
 }
