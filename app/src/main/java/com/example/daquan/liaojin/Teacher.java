@@ -12,7 +12,7 @@ public class Teacher {//解析消息
     private String courseType;//课程类别4
     private String classNumber;//上课班号5//无用
     private List<ClassClass> classClasses = new ArrayList<>();//上课班级集合
-    private ClassClass aClass;
+    private ClassClass aClass = new ClassClass();
 
     public String getCourseType() {
 
@@ -66,7 +66,6 @@ public class Teacher {//解析消息
                                 aClass = new ClassClass();
                                 classClasses.add(aClass);
                                 aClass.setClassClass(newMessage);
-//                                classClass=newMessage;
                             }else {
                                 if(messageNum.equals("7")) {//上课人数
                                     aClass.setClassPerson(newMessage);

@@ -289,13 +289,16 @@ public class MainActivity extends AppCompatActivity {
         int lineNum = 1;//行数
         for(int i = 0;i < body.size();i++) {
             Elements tds = body.get(i).select("td");
-//            Log.d("礼品",tds.text());
+            Log.d("礼品",tds.text());
             if(tds.text().equals("环节")){
                 break;
             }
             for(int j = 0;j < tds.size();j++){
                 String oldClose = tds.get(j).text();
-//                Log.d("漂亮",oldClose);
+                Log.d("漂亮",oldClose);
+                if(oldClose.equals("环节")){
+                    break;
+                }
                 if(oldClose.equals(String.valueOf(lineNum))) {
                     if (tds.get(j+1).text().equals("7")){
                         break;
